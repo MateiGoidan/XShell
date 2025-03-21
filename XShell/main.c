@@ -1,4 +1,5 @@
 #include "xvar.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,11 +10,26 @@
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
-#define MAX_PATH 1030
+// #define MAX_PATH 1030
+
+void run_script(char *path, char *script_args) {
+  FILE *script = fopen(path, "r");
+  if (!script) {
+    printf("Error: Failed to open script!");
+    return;
+  }
+
+  char line[MAX_INPUT];
+  while (fgets(line, sizeof(line), script)) {
+    line[strlen(line) - 1] = '\0';
+  }
+}
 
 void parse_command(char *input, char **args) {
-  /* Imparte input-ul in command + arguments (tokens) */
+  /* Prelucram comanda primita, daca initializeaza o variabila sau realizeaza
+   * comenzi bash */
 
+  // Initializeaza o variabila
   if (strchr(input, '=') != NULL && strchr(input, '=') == strrchr(input, '=')) {
     char *name = strtok(input, "=");
     char *value = strtok(NULL, "=");
@@ -26,11 +42,46 @@ void parse_command(char *input, char **args) {
     return;
   }
 
+  // Comenzi bash
   int i = 0;
-  args[i] = strtok(input, " "); // Primul token
-
+  args[i] = strtok(input, " ");
   while (args[i] != NULL) {
-    args[++i] = strtok(NULL, " "); // Urmator-ul token
+
+    if (strchr(args[i], '$')) {
+      // Verificam daca apare o variabila
+      char arg_copy[MAX_INPUT] = "";
+      char *pos = args[i];
+
+      while (*pos) {
+        if (*pos == '$') {
+          // Daca gasim o variabila, care incepe cu '$'
+          char name[100];
+          ++pos;
+
+          int j = 0;
+          while (*pos && (isalnum(*pos) || *pos == '_')) {
+            // Citim numele complet al variabilei
+            name[j++] = *pos++;
+          }
+          name[j] = '\0';
+
+          // Inlocuim cu valoarea daca o gasim
+          char *value = strdup(get_value(name));
+          // printf("%s", value);
+          if (value) {
+            strcat(arg_copy, value);
+          }
+        } else {
+          // Daca nu gasim o variabila
+          strncat(arg_copy, pos, 1);
+          ++pos;
+        }
+      }
+      strcpy(args[i], arg_copy);
+    }
+
+    // printf("args[i] = %s\n", args[i]);
+    args[++i] = strtok(NULL, " ");
   }
 }
 
@@ -57,6 +108,11 @@ int main() {
 
     // Ignora cazul in care input-ul este gol
     if (fgets(input, MAX_INPUT, stdin) == NULL) {
+      continue;
+    }
+
+    // Ignora cazul in care input-ul este doar "\n"
+    if (!strcmp(input, "\n")) {
       continue;
     }
 
@@ -87,7 +143,7 @@ int main() {
     pid_t pid = fork();
     if (pid == 0) {
       execvp(args[0], args);
-      perror("Error: exec failed!\n");
+      printf("Error: Unknown command %s\n", args[0]);
       exit(1);
     } else if (pid > 0) {
       wait(NULL);
