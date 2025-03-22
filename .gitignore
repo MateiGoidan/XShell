@@ -1,5 +1,6 @@
-# Bin Files
+# Nonimportant Files
 */bin/
+*/scripts/
 
 # Prerequisites
 *.d

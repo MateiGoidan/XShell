@@ -12,24 +12,10 @@
 #define MAX_ARGS 64
 // #define MAX_PATH 1030
 
-void run_script(char *path, char *script_args) {
-  FILE *script = fopen(path, "r");
-  if (!script) {
-    printf("Error: Failed to open script!");
-    return;
-  }
-
-  char line[MAX_INPUT];
-  while (fgets(line, sizeof(line), script)) {
-    line[strlen(line) - 1] = '\0';
-  }
-}
-
 void parse_command(char *input, char **args) {
-  /* Prelucram comanda primita, daca initializeaza o variabila sau realizeaza
-   * comenzi bash */
+  /* Imparte input-ul in argumente si expandeaza variabilele gasite */
 
-  // Initializeaza o variabila
+  // Initializarea / Reinitializarea variabilei
   if (strchr(input, '=') != NULL && strchr(input, '=') == strrchr(input, '=')) {
     char *name = strtok(input, "=");
     char *value = strtok(NULL, "=");
@@ -42,11 +28,11 @@ void parse_command(char *input, char **args) {
     return;
   }
 
-  // Comenzi bash
+  // Comanda bash
   int i = 0;
   args[i] = strtok(input, " ");
-  while (args[i] != NULL) {
 
+  while (args[i] != NULL) {
     if (strchr(args[i], '$')) {
       // Verificam daca apare o variabila
       char arg_copy[MAX_INPUT] = "";
@@ -54,7 +40,7 @@ void parse_command(char *input, char **args) {
 
       while (*pos) {
         if (*pos == '$') {
-          // Daca gasim o variabila, care incepe cu '$'
+          // Gasim o variabila, care incepe cu '$'
           char name[100];
           ++pos;
 
@@ -65,14 +51,13 @@ void parse_command(char *input, char **args) {
           }
           name[j] = '\0';
 
-          // Inlocuim cu valoarea daca o gasim
+          // Inlocuim cu valoarea variabilei daca exista
           char *value = strdup(get_value(name));
-          // printf("%s", value);
           if (value) {
             strcat(arg_copy, value);
           }
         } else {
-          // Daca nu gasim o variabila
+          // Nu gasim o variabila
           strncat(arg_copy, pos, 1);
           ++pos;
         }
@@ -80,12 +65,28 @@ void parse_command(char *input, char **args) {
       strcpy(args[i], arg_copy);
     }
 
-    // printf("args[i] = %s\n", args[i]);
     args[++i] = strtok(NULL, " ");
   }
 }
 
-int exec_command(char **args) {
+void exec_command(char **args) {
+  /* Proceseaza input-ul ca pe o comanda normala */
+
+  pid_t pid = fork();
+  if (pid == 0) {
+    execvp(args[0], args);
+    printf("Error: Unknown command %s\n", args[0]);
+    exit(1);
+  } else if (pid > 0) {
+    wait(NULL);
+  } else {
+    perror("Error: Fork didn't work!\n'");
+  }
+}
+
+int var_command(char **args) {
+  /* Executa comenzi specifice varibilelor */
+
   if (!strcmp(args[0], "set") && args[1] && args[2]) {
     set_variable(args[1], args[2]);
     return 1;
@@ -96,6 +97,10 @@ int exec_command(char **args) {
     return 1;
   }
 
+  return 0;
+}
+
+int run_script(char **args) {
   return 0;
 }
 
@@ -126,30 +131,18 @@ int main() {
 
     parse_command(input, args);
 
-    // printf("Command: %s\n", args[0]);
-    // int i = 1;
-    // if (args[i] != NULL) {
-    //   printf("Arguments: ");
-    //   do {
-    //     printf("%s ", args[i++]);
-    //   } while (args[i] != NULL);
-    //   printf("\n");
-    // }
-
-    if (exec_command(args)) {
+    // Comanda specifica variabilelor
+    if (var_command(args)) {
       continue;
     }
 
-    pid_t pid = fork();
-    if (pid == 0) {
-      execvp(args[0], args);
-      printf("Error: Unknown command %s\n", args[0]);
-      exit(1);
-    } else if (pid > 0) {
-      wait(NULL);
-    } else {
-      perror("Error: Fork didn't work!\n'");
+    // Script Bash
+    if (run_script(args)) {
+      continue;
     }
+
+    // Comanda Bash
+    exec_command(args);
   }
 
   return EXIT_SUCCESS;

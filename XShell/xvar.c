@@ -10,7 +10,7 @@ int xvar_numb = 0;    // Numarul variabilelor shell
 void set_variable(char *name, char *value) {
   /* Seteaza valoare "value" variabilei cu valoare name. Daca variabila "name"
    * nu se afla in array-ul "xvars" atunci definim una nou. Daca deja exista o
-   * variabila cu acest nume, "name", atunci o redefinim cu valoarea "value". */
+   * variabila cu acest nume, atunci o redefinim cu valoarea "value". */
 
   // Cazul 1: Avem deja o variabila cu numele "name"
   for (int i = 0; i < xvar_numb; i++) {
