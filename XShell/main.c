@@ -9,7 +9,9 @@
 #include <unistd.h>
 
 #define ANSI_COLOR_GREEN "\033[3;92m"
+#define ANSI_COLOR_SUCCESS "\x1b[32m"
 #define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
 #define ANSI_COLOR_RESET "\033[0m"
 
 #define MAX_INPUT 1024
@@ -68,6 +70,12 @@ void parse_command(char *input, char **args, int *duplicated) {
         }
       }
       args[i] = strdup(arg_copy);
+      if (args[i] == NULL) {
+        perror("Error: strdup failed (args[i])!\n");
+        exit(EXIT_FAILURE);
+      }
+
+      // Folosim un vector pentru a pastra argumentele intre copii
       duplicated[i] = 1;
     }
 
@@ -95,12 +103,23 @@ int var_command(char **args) {
   /* Executa comenzi specifice varibilelor */
 
   if (!strcmp(args[0], "set") && args[1] && args[2]) {
+    if (set_variable(args[1], args[2])) {
+      printf(ANSI_COLOR_SUCCESS
+             "Notice: Variable '%s' alocated.\n" ANSI_COLOR_RESET,
+             args[1]);
+    }
+
     set_variable(args[1], args[2]);
     return 1;
   }
 
   if (!strcmp(args[0], "unset") && args[1]) {
-    unset_variable(args[1]);
+    if (!unset_variable(args[1])) {
+      printf(ANSI_COLOR_YELLOW
+             "Warning: Variable '%s' not found.\n" ANSI_COLOR_RESET,
+             args[1]);
+    }
+
     return 1;
   }
 

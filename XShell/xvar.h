@@ -11,8 +11,8 @@ typedef struct{
 } XVar;
 
 // Metode 
-void set_variable(char *name, char *value);
+int set_variable(char *name, char *value);
 char *get_value(char *name);
-void unset_variable(char *name);
+int unset_variable(char *name);
 
 #endif // !XVAR
