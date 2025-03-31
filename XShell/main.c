@@ -21,8 +21,40 @@
 
 int script_depth;
 
+void var_expand(char **input_ptr, char *arg_copy) {
+  // Expandam o variabila, care incepe cu '$'
+  char *input = *input_ptr;
+  char name[100] = "";
+  ++input;
+
+  if (*input == '$') {
+    strcat(name, "$");
+  } else {
+
+    int j = 0;
+    while (*input && (isalnum(*input) || *input == '_')) {
+      // Citim numele complet al variabilei
+      name[j++] = *input++;
+    }
+    name[j] = '\0';
+  }
+
+  // Inlocuim cu valoarea variabilei daca exista
+  char *value = get_value(name);
+  if (value) {
+    strcat(arg_copy, value);
+  }
+
+  // "$$" caz
+  if (!strcmp(name, "$")) {
+    ++input;
+  }
+
+  *input_ptr = input;
+}
+
 void parse_command(char *input, char **args) {
-  /* Imparte input-ul in argumente si expandam variabile */
+  /* Imparte input-ul in argumente */
   int index = 0;
   char arg_copy[MAX_INPUT] = "";
 
@@ -42,41 +74,32 @@ void parse_command(char *input, char **args) {
 
     // Parcurgem argumentul
     while (*input && *input != ' ') {
-      if (*input == '$') {
-        // Gasim o variabila, care incepe cu '$'
-        char name[100] = "";
-        char non_var_name[100] = "";
-        strncat(non_var_name, input, 1);
+      if (*input == '"') {
         ++input;
-
-        if (*input == '$') {
-          strcat(name, "$");
-        } else {
-
-          int j = 0;
-          while (*input && (isalnum(*input) || *input == '_')) {
-            // Citim numele complet al variabilei
-            name[j++] = *input++;
+        
+        while (*input != '"') {
+          if (*input == '$') {
+            var_expand(&input, arg_copy);
           }
-          name[j] = '\0';
+          else {
+            strncat(arg_copy, input, 1);
+            ++input;
+          }
         }
 
-        // Inlocuim cu valoarea variabilei daca exista
-        char *value = get_value(name);
-        if (value) {
-          strcat(arg_copy, value);
-        }
-
-        // "$$" caz
-        if (!strcmp(name, "$")) {
+        if (*input == '"') {
           ++input;
         }
+      }
+      else if (*input == '$') {
+        var_expand(&input, arg_copy);
       } else {
         // Nu gasim o variabila
         strncat(arg_copy, input, 1);
         ++input;
       }
     }
+
     args[index] = strdup(arg_copy);
     if (args[index] == NULL) {
       perror("Error: strdup failed (args[i])!\n");
@@ -128,7 +151,7 @@ void var_command(char **args, int visible) {
   /* Executa comenzi specifice varibilelor */
 
   // Unset variabile
-  if (!strcmp(args[0], "unset") && args[1]) {
+  if (!strcmp(args[0], "unset") && args[1] && strcmp(args[1], "")) {
     for (int i = 1; args[i] != NULL; i++) {
       if (!unset_variable(args[i]) && visible) {
         printf(ANSI_COLOR_YELLOW
@@ -317,10 +340,6 @@ int main() {
     input[strlen(input) - 1] = '\0';
 
     parse_command(input, args);
-
-    /* for (int i = 0; args[i] != NULL; i++) {
-      printf("arg[%d] = %s\n", i, args[i]);
-    } */
 
     // Ignora cazul in care input-ul este doar spatii goale
     if (!strcmp(args[0], "\0")) {
