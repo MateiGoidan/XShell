@@ -75,7 +75,6 @@ int unset_variable(char *name) {
       // Eliberare memorie
       free(xvars[i].name);
       free(xvars[i].value);
-      unsetenv(name);
 
       // Configurare array
       xvars[i] = xvars[--xvar_numb];
@@ -84,4 +83,13 @@ int unset_variable(char *name) {
   }
 
   return 0;
+}
+
+
+void free_variables() {
+  for (int i = 0; i < xvar_numb; i++) {
+    unset_variable(xvars[i].name);
+  }
+
+  xvar_numb = 0;
 }

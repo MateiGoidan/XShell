@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -17,120 +18,160 @@
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
 
-void parse_command(char *input, char **args, int *duplicated) {
-  /* Imparte input-ul in argumente si expandeaza variabilele gasite */
+void parse_command(char *input, char **args) {
+  /* Imparte input-ul in argumente si expandam variabile */
+  int index = 0;
+  char arg_copy[MAX_INPUT] = "";
 
-  // Initializarea / Reinitializarea variabilei
-  if (strchr(input, '=') != NULL && strchr(input, '=') == strrchr(input, '=')) {
-    char *name = strtok(input, "=");
-    char *value = strtok(NULL, "=");
+  while (*input) {
+    // Final input
+    if (*input == '\0') {
+      ++index;
+      break;
+    }
 
-    args[0] = "set";
-    args[1] = name;
-    args[2] = value;
-    args[3] = NULL;
+    // Ignoram spatiile dintre argumente
+    while (*input == ' ') {
+      ++input;
+    }
+
+    arg_copy[0] = '\0';
+
+    // Parcurgem argumentul
+    while (*input && *input != ' ') {
+      if (*input == '$') {
+        // Gasim o variabila, care incepe cu '$'
+        char name[100] = "";
+        char non_var_name[100] = "";
+        strncat(non_var_name, input, 1);
+        ++input;
+
+        if (*input == '$') {
+          strcat(name, "$");
+        } else {
+
+          int j = 0;
+          while (*input && (isalnum(*input) || *input == '_')) {
+            // Citim numele complet al variabilei
+            name[j++] = *input++;
+          }
+          name[j] = '\0';
+        }
+
+        // Inlocuim cu valoarea variabilei daca exista
+        char *value = get_value(name);
+        if (value) {
+          strcat(arg_copy, value);
+        }
+
+        // "$$" caz
+        if (!strcmp(name, "$")) {
+          ++input;
+        }
+      } else {
+        // Nu gasim o variabila
+        strncat(arg_copy, input, 1);
+        ++input;
+      }
+    }
+    args[index] = strdup(arg_copy);
+    if (args[index] == NULL) {
+      perror("Error: strdup failed (args[i])!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    ++index;
+  }
+
+  args[index] = NULL;
+}
+
+int exec_command(char **args) {
+  /* Proceseaza input-ul ca pe o comanda normala */
+
+  // Sarim peste declararea de variabile
+  int i = 0;
+  while (args[i] && strchr(args[i], '=') != NULL &&
+         strchr(args[i], '=') == strrchr(args[i], '=')) {
+    ++i;
+  }
+
+  if (args[i] == NULL) {
+    return -1;
+  }
+
+  pid_t pid = fork();
+  if (pid == 0 && args[i]) {
+    execvp(args[i], &args[i]);
+    printf(ANSI_COLOR_RED "Error: Unknown command %s\n" ANSI_COLOR_RESET,
+           args[i]);
+    exit(1);
+  } else if (pid > 0) {
+    int status;
+    waitpid(pid, &status, 0); // Salvam output-ul copilului
+
+    if (WIFEXITED(status)) {
+      return 0;
+    } else {
+      return -1;
+    }
+  } else {
+    perror("Error: Fork didn't work!\n'");
+    return -1;
+  }
+}
+
+void var_command(char **args, int visible) {
+  /* Executa comenzi specifice varibilelor */
+
+  // Unset variabile
+  if (!strcmp(args[0], "unset") && args[1]) {
+    for (int i = 1; args[i] != NULL; i++) {
+      if (!unset_variable(args[i]) && visible) {
+        printf(ANSI_COLOR_YELLOW
+               "Warning: Variable '%s' not found.\n" ANSI_COLOR_RESET,
+               args[i]);
+      }
+    }
 
     return;
   }
 
-  // Comanda bash
-  int i = 0;
-  args[i] = strtok(input, " ");
-
-  while (args[i] != NULL) {
-    if (strchr(args[i], '$')) {
-      // Verificam daca apare o variabila
-      char arg_copy[MAX_INPUT] = "";
-      char *pos = args[i];
-
-      while (*pos) {
-        if (*pos == '$') {
-          // Gasim o variabila, care incepe cu '$'
-          char name[100];
-          ++pos;
-
-          int j = 0;
-          while (*pos && (isalnum(*pos) || *pos == '_')) {
-            // Citim numele complet al variabilei
-            name[j++] = *pos++;
-          }
-          name[j] = '\0';
-
-          // Inlocuim cu valoarea variabilei daca exista
-          char *value = get_value(name);
-          if (value) {
-            strcat(arg_copy, value);
-          } else {
-            strcat(arg_copy, args[i]);
-          }
-        } else {
-          // Nu gasim o variabila
-          strncat(arg_copy, pos, 1);
-          ++pos;
-        }
-      }
-      args[i] = strdup(arg_copy);
-      if (args[i] == NULL) {
-        perror("Error: strdup failed (args[i])!\n");
-        exit(EXIT_FAILURE);
-      }
-
-      // Folosim un vector pentru a pastra argumentele intre copii
-      duplicated[i] = 1;
-    }
-
-    args[++i] = strtok(NULL, " ");
-  }
-}
-
-void exec_command(char **args) {
-  /* Proceseaza input-ul ca pe o comanda normala */
-
-  pid_t pid = fork();
-  if (pid == 0) {
-    execvp(args[0], args);
-    printf(ANSI_COLOR_RED "Error: Unknown command %s\n" ANSI_COLOR_RESET,
-           args[0]);
-    exit(1);
-  } else if (pid > 0) {
-    wait(NULL);
-  } else {
-    perror("Error: Fork didn't work!\n'");
-  }
-}
-
-int var_command(char **args) {
-  /* Executa comenzi specifice varibilelor */
-
-  if (!strcmp(args[0], "set") && args[1] && args[2]) {
-    if (set_variable(args[1], args[2])) {
-      printf(ANSI_COLOR_SUCCESS
-             "Notice: Variable '%s' alocated.\n" ANSI_COLOR_RESET,
-             args[1]);
-    }
-
-    set_variable(args[1], args[2]);
-    return 1;
-  }
-
-  if (!strcmp(args[0], "unset") && args[1]) {
-    if (!unset_variable(args[1])) {
-      printf(ANSI_COLOR_YELLOW
-             "Warning: Variable '%s' not found.\n" ANSI_COLOR_RESET,
-             args[1]);
-    }
-
-    return 1;
-  }
-
-  return 0;
-}
-
-void free_args(char **args, int *duplicated) {
+  // Setam variabile
   for (int i = 0; args[i] != NULL; i++) {
-    if (duplicated[i]) {
-      free(args[i]);
+    if (strchr(args[i], '=') != NULL &&
+        strchr(args[i], '=') == strrchr(args[i], '=')) {
+      char name[MAX_INPUT] = "";
+      char value[MAX_INPUT] = "";
+
+      int j = 0;
+      while (args[i][j] != '=') {
+        name[j] = args[i][j];
+        ++j;
+      }
+
+      if (args[i][j] == '=') {
+        ++j;
+      }
+
+      int k = 0;
+      while (args[i][j] != '\0') {
+        value[k++] = args[i][j++];
+      }
+
+      if (set_variable(name, value) && visible) {
+        printf(ANSI_COLOR_SUCCESS
+               "Notice: Variable '%s' alocated.\n" ANSI_COLOR_RESET,
+               name);
+      }
     }
+  }
+}
+
+void free_args(char **args) {
+  /* Eliberam memoria alocata argumentelor */
+  for (int i = 0; args[i] != NULL; i++) {
+    free(args[i]);
     args[i] = NULL;
   }
 }
@@ -165,24 +206,57 @@ int run_script(char **args) {
     char line[MAX_INPUT];
     while (fgets(line, sizeof(line), script)) {
       char *arguments[MAX_ARGS];
-      int duplicated[MAX_ARGS] = {0};
 
-      line[strlen(line) - 1] = '\0';
-
-      parse_command(line, arguments, duplicated);
-
-      if (strcmp(line, "exit") == 0) {
-        free_args(arguments, duplicated);
-        return 2;
-      }
-
-      if (var_command(arguments)) {
+      if (!strcmp(line, "\n")) {
         continue;
       }
 
-      exec_command(arguments);
+      line[strlen(line) - 1] = '\0';
 
-      free_args(arguments, duplicated);
+      parse_command(line, arguments);
+
+      if (!strcmp(arguments[0], "\0")) {
+        continue;
+      }
+
+      if (strcmp(arguments[0], "exit") == 0) {
+        free_args(arguments);
+        for (int i = 1; args[i] != NULL; i++) {
+          char digit[12];
+          sprintf(digit, "%d", i);
+          unset_variable(digit);
+        }
+        return 2;
+      }
+
+      // Bash
+      if (strcmp(arguments[0], "unset")) {
+        // Script
+        int output = run_script(arguments);
+        if (output == 1) {
+          free_args(arguments);
+          continue;
+        } else if (output == 2) {
+          free_args(arguments);
+          for (int i = 1; args[i] != NULL; i++) {
+            char digit[12];
+            sprintf(digit, "%d", i);
+            unset_variable(digit);
+          }
+          return 2;
+        }
+
+        // Comanda
+        int code = exec_command(arguments);
+        if (code == 0) {
+          free_args(arguments);
+          continue;
+        }
+      }
+
+      var_command(arguments, 0);
+
+      free_args(arguments);
     }
 
     // Eliminam variabilelor primite ca argument
@@ -201,7 +275,13 @@ int run_script(char **args) {
 int main() {
   char input[MAX_INPUT];
   char *args[MAX_ARGS];
-  int duplicated[MAX_ARGS] = {0};
+
+  // Setam variabila PID
+  char pid_str[20];
+  pid_t pid = getpid();
+  snprintf(pid_str, sizeof(pid_str), "%d", pid);
+  set_variable("$", pid_str);
+  // printf("PID as string: %s\n", get_value("$"));
 
   while (1) {
     printf(ANSI_COLOR_GREEN "XShell> " ANSI_COLOR_RESET);
@@ -211,7 +291,6 @@ int main() {
       continue;
     }
 
-    // Ignora cazul in care input-ul este doar "\n"
     if (!strcmp(input, "\n")) {
       continue;
     }
@@ -219,32 +298,51 @@ int main() {
     // Inlatura "\n" de la sfarsitul liniei
     input[strlen(input) - 1] = '\0';
 
+    parse_command(input, args);
+
+    /* for (int i = 0; args[i] != NULL; i++) {
+      printf("arg[%d] = %s\n", i, args[i]);
+    } */
+
+    // Ignora cazul in care input-ul este doar spatii goale
+    if (!strcmp(args[0], "\0")) {
+      continue;
+    }
+
     // Iesire shell
-    if (strcmp(input, "exit") == 0) {
-      free_args(args, duplicated);
+    if (strcmp(args[0], "exit") == 0) {
+      free_args(args);
+      free_variables();
       printf("\n");
       break;
     }
 
-    parse_command(input, args, duplicated);
+    // Bash
+    if (strcmp(args[0], "unset")) {
+      // Script
+      int output = run_script(args);
+      if (output == 1) {
+        free_args(args);
+        continue;
+      } else if (output == 2) {
+        free_args(args);
+        free_variables();
+        printf("\n");
+        break;
+      }
 
-    // Script Bash
-    int output = run_script(args);
-    if (output == 1) {
-      continue;
-    } else if (output == 2) {
-      break;
+      // Comanda
+      int code = exec_command(args);
+      if (code == 0) {
+        free_args(args);
+        continue;
+      }
     }
 
-    // Comanda specifica variabilelor
-    if (var_command(args)) {
-      continue;
-    }
+    // Variabile
+    var_command(args, 1);
 
-    // Comanda Bash
-    exec_command(args);
-
-    free_args(args, duplicated);
+    free_args(args);
   }
 
   return EXIT_SUCCESS;

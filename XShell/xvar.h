@@ -14,5 +14,6 @@ typedef struct{
 int set_variable(char *name, char *value);
 char *get_value(char *name);
 int unset_variable(char *name);
+void free_variables();
 
 #endif // !XVAR
