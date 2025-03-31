@@ -17,6 +17,9 @@
 
 #define MAX_INPUT 1024
 #define MAX_ARGS 64
+#define MAX_SCRIPT_DEPTH 32
+
+int script_depth;
 
 void parse_command(char *input, char **args) {
   /* Imparte input-ul in argumente si expandam variabile */
@@ -189,8 +192,16 @@ int run_script(char **args) {
       return 1;
     }
 
+    // Verificam daca nu am ajuns la numarul maxim de apeluri recursive
+    if (script_depth >= MAX_SCRIPT_DEPTH) {
+      fprintf(
+          stderr, ANSI_COLOR_RED
+          "Error: Maximum script recursion depth reached!\n" ANSI_COLOR_RESET);
+      return 1;
+    }
+
     // Initializam argumentele din linia de comanda
-    for (int i = 1; args[i] != NULL; i++) {
+    for (int i = 0; args[i] != NULL; i++) {
       char digit[12];
       sprintf(digit, "%d", i);
       set_variable(digit, args[i]);
@@ -206,6 +217,11 @@ int run_script(char **args) {
     char line[MAX_INPUT];
     while (fgets(line, sizeof(line), script)) {
       char *arguments[MAX_ARGS];
+
+      // Sarim peste comentarii
+      if (line[0] == '#') {
+        continue;
+      }
 
       if (!strcmp(line, "\n")) {
         continue;
@@ -228,6 +244,8 @@ int run_script(char **args) {
         }
         return 2;
       }
+
+      script_depth++;
 
       // Bash
       if (strcmp(arguments[0], "unset")) {
@@ -323,10 +341,12 @@ int main() {
       int output = run_script(args);
       if (output == 1) {
         free_args(args);
+        script_depth = 0;
         continue;
       } else if (output == 2) {
         free_args(args);
         free_variables();
+        script_depth = 0;
         printf("\n");
         break;
       }
