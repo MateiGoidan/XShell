@@ -1,4 +1,4 @@
-/* Structura pentru a defini/redefini variabile shell */
+/* Structure for defining / redefining shell variables */
 
 #ifndef XVAR
 #define XVAR
@@ -10,7 +10,7 @@ typedef struct{
   char *value;
 } XVar;
 
-// Metode 
+/* Methods */
 int set_variable(char *name, char *value);
 char *get_value(char *name);
 int unset_variable(char *name);

@@ -4,15 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-XVar xvars[MAX_VARS]; // Array de variabile shell
-int xvar_numb = 0;    // Numarul variabilelor shell
+XVar xvars[MAX_VARS]; // Shell variable array
+int xvar_numb = 0;    // Number of shell variables
 
 int set_variable(char *name, char *value) {
-  /* Seteaza valoare "value" variabilei cu valoare name. Daca variabila "name"
-   * nu se afla in array-ul "xvars" atunci definim una nou. Daca deja exista o
-   * variabila cu acest nume, atunci o redefinim cu valoarea "value". */
+  /* Sets the value "value" to the variable named "name". 
+   * If the variable "name" is not found in the "xvars" array, a new one is defined.
+   * If a variable with this name already exists, it is redefined with the new value. */
 
-  // Cazul 1: Avem deja o variabila cu numele "name"
+  // Case 1: We already have a variable with the name "name"
   for (int i = 0; i < xvar_numb; i++) {
     if (!strcmp(name, xvars[i].name)) {
       free(xvars[i].value);
@@ -29,7 +29,7 @@ int set_variable(char *name, char *value) {
     }
   }
 
-  // Cazul 2: Nu avem o variabila cu numele "name"
+  // Case 2: We don't have a variable with the name "name"
   if (xvar_numb < MAX_VARS) {
     xvars[xvar_numb].name = strdup(name);
     if (xvars[xvar_numb].name == NULL) {
@@ -56,7 +56,7 @@ int set_variable(char *name, char *value) {
 }
 
 char *get_value(char *name) {
-  /* Returneaza valoarea variabilei cu numele "name" */
+  /* Returns the value of the variable with the name "name" */
 
   for (int i = 0; i < xvar_numb; i++) {
     if (!strcmp(name, xvars[i].name)) {
@@ -68,15 +68,15 @@ char *get_value(char *name) {
 }
 
 int unset_variable(char *name) {
-  /* Elimina variabila cu numele "name" */
+  /* Removes the variable with the name "name" */
 
   for (int i = 0; i < xvar_numb; i++) {
     if (!strcmp(name, xvars[i].name)) {
-      // Eliberare memorie
+      // Free memory
       free(xvars[i].name);
       free(xvars[i].value);
 
-      // Configurare array
+      // Adjust the array
       xvars[i] = xvars[--xvar_numb];
       return 1;
     }
@@ -85,8 +85,8 @@ int unset_variable(char *name) {
   return 0;
 }
 
-
 void free_variables() {
+  /* Frees all allocated variables */
   for (int i = 0; i < xvar_numb; i++) {
     unset_variable(xvars[i].name);
   }
